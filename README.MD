@@ -22,6 +22,9 @@ Run the script with the hostname as an argument:
 
 ./backup_script.sh your_hostname
 
+To use all the designated host in .pgpass file use script all-loop-script.sh
+
+./all-loop-script.sh
 
 Notes
 
