@@ -1,22 +1,14 @@
 #!/bin/bash
 
 # Path to the .pgpass file
-PGPASS_FILE="/home/infrateam/db-backups-script/.pgpass"
+PGPASS_FILE="/home/infrateam/auto-db-backups/.pgpass"
 
 # Function to extract values from the .pgpass file
 get_pgpass_details() {
-    local hostname="$1"
+    local pgpass_entry="$1"
     
-    # Extract the corresponding line from the .pgpass file
-    details=$(grep "^$hostname:" "$PGPASS_FILE")
-
-    if [[ -z "$details" ]]; then
-        echo "No matching entry found for $hostname in .pgpass."
-        exit 1
-    fi
-
-    # Extract the details from the line
-    IFS=':' read -r PG_HOST PG_PORT PG_DB PG_USER PG_PASS <<< "$details"
+    # Extract the details from the .pgpass entry
+    IFS=':' read -r PG_HOST PG_PORT PG_DB PG_USER PG_PASS <<< "$pgpass_entry"
 
     # Export the details as environment variables
     export PGHOST="$PG_HOST"
@@ -28,7 +20,7 @@ get_pgpass_details() {
 
 # Function to take a backup of the database
 take_backup() {
-    local hostname="$1"
+    local pgpass_entry="$1"
     local timestamp=$(date +"%Y%m%d_%H%M%S")
     local backup_dir="${PGDATABASE}-${PGHOST}"
     local backup_file="${backup_dir}/${PGDATABASE}-${PGHOST}-${timestamp}.sql"
@@ -68,25 +60,27 @@ cleanup_old_backups() {
     fi
 }
 
-# Function to get all unique hostnames from .pgpass file
-get_all_hostnames() {
-    # Extract hostnames (first field before the first colon)
-    awk -F: '{print $1}' "$PGPASS_FILE" | sort | uniq
+# Function to process each entry in the .pgpass file
+process_pgpass_entries() {
+    # Loop over each line in the .pgpass file
+    while IFS= read -r pgpass_entry; do
+        # Skip empty lines or comments
+        if [[ -z "$pgpass_entry" || "$pgpass_entry" =~ ^# ]]; then
+            continue
+        fi
+
+        # Get PostgreSQL connection details from the .pgpass entry
+        get_pgpass_details "$pgpass_entry"
+
+        # Take a backup for this database/host combination
+        take_backup "$pgpass_entry"
+    done < "$PGPASS_FILE"
 }
 
-# Main function to run the backup for all hosts
+# Main function to run the backup for all entries in .pgpass
 main() {
-    # Get all unique hostnames from the .pgpass file
-    hostnames=$(get_all_hostnames)
-
-    # Loop through each hostname and perform the backup
-    for hostname in $hostnames; do
-        # Get PostgreSQL connection details from .pgpass for this hostname
-        get_pgpass_details "$hostname"
-        
-        # Take a backup of the database for this hostname
-        take_backup "$hostname"
-    done
+    # Process each entry in the .pgpass file
+    process_pgpass_entries
 }
 
 # Run the script
